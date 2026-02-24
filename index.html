@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SMART Robotics thailand  Simulator Arduino Edition</title>
+<title>SMR Robot Simulator Arduino Edition</title>
 <style>
     /* กำหนดตัวแปรสีสำหรับโหมดปกติ (Light Mode) */
     :root {
@@ -205,13 +205,14 @@
     body.dark-mode code { background: rgba(255,255,255,0.1); }
     
     .info-text { font-size: 14px; opacity: 0.8; margin-top: 10px; display: block; }
+    .info-text a { color: inherit; text-decoration: underline; }
 </style>
 </head>
 <body>
 
 <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">🌙 โหมดกลางคืน</button>
 
-<h2>SMART Robotics thailand  Simulator Arduino Edition ฝึกเขียนโปรแกรม ระดับกลาง สพฐ. </h2>
+<h2>SMR Robot simulator Arduino Edition 2026</h2>
 
 <div class="top-controls">
     <div id="setupControls">
@@ -235,7 +236,10 @@
 
 <div id="field"></div>
 
-<span class="info-text">SMR V6.0 (2026) - ระบบจำลองการเคลื่อนที่หุ่นยนต์  สนใจแอดไลน์ อ.วุฒิ 0847999639 </span>
+<span class="info-text">
+    SMR V6.1.0 (2026) - ระบบจำลองการเคลื่อนที่หุ่นยนต์ | สนใจติดต่อ จัดอบรมหรือหุ่นยนต์ โทร 0847999639 | 
+    เว็บไซต์: <a href="http://robot-camp.lnwshop.com/" target="_blank">robot-camp.lnwshop.com</a>
+</span>
 
 <div class="control-area hidden" id="codingArea">
     <div class="button-group">
@@ -261,6 +265,7 @@ JY1();</textarea>
                 <p style="color: #28a745; font-weight: bold; margin: 0;">🎯 เงื่อนไขคะแนนเพิ่มเติม:</p>
                 <p style="font-size: 13px; margin: 4px 0 0 0;">• วิ่งผ่านจุดเหลือง: <b>+5 คะแนน</b></p>
                 <p style="font-size: 13px; margin: 2px 0 0 0;">• เติมครบ 4 เขียว + กลับที่พัก: <b>+10 คะแนน</b></p>
+                <p style="font-size: 13px; margin: 2px 0 0 0; color: #d9534f;">• <b>ระวัง:</b> ห้ามเดินชนเส้นดำ!</p>
             </div>
         </div>
     </div>
@@ -271,8 +276,8 @@ const field = document.getElementById("field");
 let row=3, col=0, direction=0;
 let wallEdges=[], greenCells=[], ammo=4, score=0, running=false, loopActive=false;
 let roundCount = 1;
-let returnBonus = 0; // โบนัสการกลับจุดเริ่มต้น
-let bonusClaimed = false; // ป้องกันการรับโบนัสซ้ำในรอบเดียว
+let returnBonus = 0;
+let bonusClaimed = false;
 
 // --- ระบบเสียงเอฟเฟกต์ ---
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -493,15 +498,31 @@ function hitEffect(){
 
 function moveForward(){
     let nr=row, nc=col;
-    if(direction===0){ if(hasWall(row,col,"top")) return hitEffect(); nr--; }
-    if(direction===90){ if(hasWall(row,col,"right")) return hitEffect(); nc++; }
-    if(direction===180){ if(hasWall(row,col,"bottom")) return hitEffect(); nr++; }
-    if(direction===270){ if(hasWall(row,col,"left")) return hitEffect(); nc--; }
+    
+    // ตรวจสอบเส้นดำ (กำแพง) ทั้งสองฝั่งของขอบช่อง (Shared Edge check)
+    if(direction===0){ 
+        if(hasWall(row,col,"top") || (row > 0 && hasWall(row-1, col, "bottom"))) return hitEffect(); 
+        nr--; 
+    }
+    else if(direction===90){ 
+        if(hasWall(row,col,"right") || (col < 7 && hasWall(row, col+1, "left"))) return hitEffect(); 
+        nc++; 
+    }
+    else if(direction===180){ 
+        if(hasWall(row,col,"bottom") || (row < 3 && hasWall(row+1, col, "top"))) return hitEffect(); 
+        nr++; 
+    }
+    else if(direction===270){ 
+        if(hasWall(row,col,"left") || (col > 0 && hasWall(row, col-1, "right"))) return hitEffect(); 
+        nc--; 
+    }
+
     if(nr<0||nr>=4||nc<0||nc>=8){ hitEffect(); return; }
+    
     row=nr; col=nc; 
     moveSound(); 
     updateRobot();
-    checkReturnBonus(); // เช็คเงื่อนไขโบนัสกลับบ้านทุกก้าว
+    checkReturnBonus();
 }
 
 function moveBackward(){ direction=(direction+180)%360; moveForward(); direction=(direction+180)%360; updateRobot(); }
@@ -569,17 +590,12 @@ function checkYellowScore() {
     });
 }
 
-// --- ฟังก์ชันเช็คโบนัสกลับบ้าน ---
 function checkReturnBonus() {
     if (bonusClaimed) return;
-
     let greenFilledCount = 0;
     document.querySelectorAll(".box").forEach(box => {
-        // เช็คว่ากล่องนั้นวางอยู่ในตำแหน่งพื้นที่สีเขียว (สีเขียวเข้ม) หรือยัง
         if (box.style.background === "rgb(34, 139, 34)") greenFilledCount++;
     });
-
-    // เงื่อนไข: เติมครบทุกพื้นที่สีเขียว (4 จุด) และ หุ่นยนต์อยู่ที่จุดเริ่มต้น (3, 0)
     if (greenFilledCount === 4 && row === 3 && col === 0) {
         returnBonus = 10;
         bonusClaimed = true;
@@ -639,6 +655,3 @@ updateRobot(); randomGreenCells(); generateWalls();
 </script>
 </body>
 </html>
-
-
-
